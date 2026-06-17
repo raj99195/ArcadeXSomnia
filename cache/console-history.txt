@@ -1,0 +1,24 @@
+console.log("Signer:", signer.address);
+const [signer] = await ethers.getSigners();
+const ADMIN_ROLE = ethers.keccak256(ethers.toUtf8Bytes("ADMIN_ROLE"));
+const platform = await ethers.getContractAt("Platform", process.env.VITE_PLATFORM_ADDRESS);
+const arcadeAddr = await T2.arcadeToken(); console.log("ArcadeToken:", arcadeAddr);
+await Token.transferFrom.staticCall("0xeecd96e5684f1b49c2775fadbe5de6ecb012f2cb", "0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95", ethers.parseEther("100"), {from: "0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95"});
+await T2.joinTournament.staticCall(1, {from: "0xeecd96e5684f1b49c2775fadbe5de6ecb012f2cb"});
+const approved = await Token.approve("0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95", ethers.parseEther("100")); await approved.wait(); console.log("Approved!"); const tx2 = await T2.connect(signer).joinTournament(1); await tx2.wait(); console.log("Joined!", tx2.hash);
+const bal = await Token.balanceOf("0xeecd96e5684f1b49c2775fadbe5de6ecb012f2cb"); console.log("Admin ARCADE balance:", bal.toString());
+require(t.status == TournamentStatus.Upcoming || t.status == TournamentStatus.Active, "Not joinable");
+const info2 = await T2.getTournamentInfo(1); console.log("startTime:", Number(info2.startTime), "blockTime:", (await ethers.provider.getBlock("latest")).timestamp);
+const [signer] = await ethers.getSigners(); const tx = await T2.connect(signer).joinTournament(1); console.log("tx:", tx.hash);
+console.log("block time:", new Date(1779547217 * 1000).toString());
+console.log("now:", new Date().toString(), "block:", (await ethers.provider.getBlock("latest")).timestamp);
+const T2 = await ethers.getContractAt("Tournament", "0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95"); const info = await T2.getTournamentInfo(1); console.log("end:", new Date(Number(info.endTime)*1000).toString(), "entryFee:", info.entryFee.toString());
+const Token = await ethers.getContractAt("ArcadeToken", "0x8fFDeb6302bbCE1Eed142E083918CAc00E2F31a2"); const allowance = await Token.allowance("0xeecd96e5684f1b49c2775fadbe5de6ecb012f2cb", "0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95"); console.log("Allowance:", allowance.toString());
+const t = await T.getTournamentInfo(1); console.log("end:", new Date(Number(t.endTime)*1000).toString(), "now:", new Date().toString());
+const T = await ethers.getContractAt("Tournament", "0xb070CFb23cb5f233D1bACD1BA3CBA2004f346A95"); const t = await T.getTournamentInfo(1); console.log(t.status.toString(), new Date(Number(t.startTime)*1000).toString(), t.players.length);
+>
+Type ".help" for more information.
+Welcome to Node.js v22.19.0.
+◇ injected env (0) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (33) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+C:\Users\Blockchain\Videos\initia-arcade\ArcadeX>npx hardhat console --network botchain_testnet

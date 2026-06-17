@@ -1,0 +1,44 @@
+/* src/index.css */
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+:root {
+  --green: #00FF88;
+  --purple: #7B2FFF;
+  --bg: #0C0C0C;
+  --card: #111111;
+  --border: #1E1E1E;
+  --muted: #444444;
+}
+
+body {
+  background: var(--bg);
+  color: #ffffff;
+  font-family: 'Inter', -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-12px); }
+}
