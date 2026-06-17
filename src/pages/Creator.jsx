@@ -4,10 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { saveGame, saveCreator, getGamesByCreator, registerCreator, getCreatorStatus, getGameById } from "../lib/gameService";
 import { useArcadeBalance } from "../hooks/useArcadeBalance";
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
-import { wagmiAdapter } from "../Providers";
+import { wagmiAdapter, CHAIN_ID } from "../Providers";
 
 const PLATFORM_ADDRESS = import.meta.env.VITE_PLATFORM_ADDRESS;
-const CHAIN_ID = Number(import.meta.env.VITE_BOTCHAIN_MAINNET_CHAIN_ID);
+// CHAIN_ID now imported from Providers.jsx (single source of truth)
 const CREATOR_NFT_ADDRESS = import.meta.env.VITE_CREATOR_NFT_ADDRESS;
 
 const PLATFORM_ABI = [
