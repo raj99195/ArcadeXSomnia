@@ -208,7 +208,7 @@ export default function GamePlay() {
         address: PLATFORM_ADDRESS, abi: PLATFORM_ABI,
         functionName: "recordPlayAndEarn",
         args: [BigInt(onChainGameId), BigInt(finalScore)],
-        gas: BigInt(6,000,000),
+        gas: BigInt(6000000),
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
 
@@ -218,7 +218,7 @@ export default function GamePlay() {
             address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_SCORE_ABI,
             functionName: "submitTournamentScore",
             args: [BigInt(tournamentId), BigInt(finalScore)],
-            gas: BigInt(1,500,000), chainId: CHAIN_ID,
+            gas: BigInt(1500000), chainId: CHAIN_ID,
           });
           await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash: tHash });
         } catch (tErr) {

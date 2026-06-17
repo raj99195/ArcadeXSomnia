@@ -280,7 +280,7 @@ export default function Creator() {
         abi: NFT_ABI,
         functionName: "mintCreatorNFT",
         args: [username, selectedStyle],
-        gas: BigInt(1,500,000),
+        gas: BigInt(1500000),
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
@@ -291,7 +291,7 @@ export default function Creator() {
         abi: PLATFORM_ABI,
         functionName: "initCreator",
         args: [address],
-        gas: BigInt(600,000),
+        gas: BigInt(600000),
         chainId: CHAIN_ID,
       });
 
@@ -366,7 +366,7 @@ export default function Creator() {
           startTime,
           BigInt(tForm.durationInHours),
         ],
-        gas: BigInt(1,500,000),
+        gas: BigInt(1500000),
         chainId: CHAIN_ID, // BOTChain testnet — explicit chainId fix
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
@@ -388,7 +388,7 @@ export default function Creator() {
         abi: TOURNAMENT_ABI,
         functionName: "endTournamentAndDistribute",
         args: [BigInt(tournamentId)],
-        gas: BigInt(1,000,000),
+        gas: BigInt(1000000),
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
@@ -464,7 +464,7 @@ export default function Creator() {
         abi: PLATFORM_ABI,
         functionName: "registerGame",
         args: [form.name, form.iframeUrl, BigInt(parseInt(form.rewardRate) || MIN_REWARD_RATE)],
-        gas: BigInt(1,500,000),
+        gas: BigInt(1500000),
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
