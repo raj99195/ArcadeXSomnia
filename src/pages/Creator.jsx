@@ -131,8 +131,8 @@ function GameModal({ game, onClose }) {
           </button>
         </div>
         {game.txHash && (
-          <a href={`https://scan.botchain.ai/tx/${game.txHash}`} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", padding: "10px", background: "rgba(123,47,255,0.08)", border: `1px solid ${P.b2}`, borderRadius: 8, color: "#a67fff", fontSize: 11, textDecoration: "none", fontFamily: P.raj, fontWeight: 700 }}>
-            View on BOTChain Explorer →
+          <a href={`https://shannon-explorer.somnia.network/tx/${game.txHash}`} target="_blank" rel="noreferrer" style={{ display: "block", textAlign: "center", padding: "10px", background: "rgba(123,47,255,0.08)", border: `1px solid ${P.b2}`, borderRadius: 8, color: "#a67fff", fontSize: 11, textDecoration: "none", fontFamily: P.raj, fontWeight: 700 }}>
+            View on Somnia Explorer →
           </a>
         )}
       </div>
