@@ -3,7 +3,7 @@ import { useAccount, usePublicClient } from "wagmi";
 import { useNavigate } from "react-router-dom";
 import { saveGame, saveCreator, getGamesByCreator, registerCreator, getCreatorStatus, getGameById } from "../lib/gameService";
 import { useArcadeBalance } from "../hooks/useArcadeBalance";
-import { writeContract, waitForTransactionReceipt, estimateContractGas } from "@wagmi/core";
+import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
 import { wagmiAdapter, CHAIN_ID } from "../Providers";
 
 const PLATFORM_ADDRESS = import.meta.env.VITE_PLATFORM_ADDRESS;
@@ -76,10 +76,12 @@ const DICEBEAR_STYLES = [
 // Estimates real gas needed for any contract call, then adds a 30% safety
 // buffer. Works correctly on any chain (BOTChain, Somnia, future chains) —
 // no more hardcoded gas guesswork that breaks when migrating chains.
-async function getGasWithBuffer({ address, abi, functionName, args, account, bufferPct = 30 }) {
+// Takes `publicClient` (from wagmi's usePublicClient hook) since
+// estimateContractGas lives on viem's public client, not @wagmi/core.
+async function getGasWithBuffer(publicClient, { address, abi, functionName, args, account, bufferPct = 30 }) {
   try {
-    const estimated = await estimateContractGas(wagmiAdapter.wagmiConfig, {
-      address, abi, functionName, args, account, chainId: CHAIN_ID,
+    const estimated = await publicClient.estimateContractGas({
+      address, abi, functionName, args, account,
     });
     return (estimated * BigInt(100 + bufferPct)) / 100n;
   } catch (err) {
@@ -291,7 +293,7 @@ export default function Creator() {
     setMintLoading(true);
     try {
       // 1. Mint NFT — gas estimated dynamically
-      const mintGas = await getGasWithBuffer({
+      const mintGas = await getGasWithBuffer(publicClient, {
         address: CREATOR_NFT_ADDRESS,
         abi: NFT_ABI,
         functionName: "mintCreatorNFT",
@@ -310,7 +312,7 @@ export default function Creator() {
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
 
       // 2. initCreator on Platform — gas estimated dynamically
-      const initGas = await getGasWithBuffer({
+      const initGas = await getGasWithBuffer(publicClient, {
         address: PLATFORM_ADDRESS,
         abi: PLATFORM_ABI,
         functionName: "initCreator",
@@ -395,7 +397,7 @@ export default function Creator() {
         BigInt(tForm.durationInHours),
       ];
 
-      const createGas = await getGasWithBuffer({
+      const createGas = await getGasWithBuffer(publicClient, {
         address: TOURNAMENT_ADDRESS,
         abi: TOURNAMENT_ABI,
         functionName: "createTournament",
@@ -425,7 +427,7 @@ export default function Creator() {
 
   const handleEndTournament = async (tournamentId) => {
     try {
-      const endGas = await getGasWithBuffer({
+      const endGas = await getGasWithBuffer(publicClient, {
         address: TOURNAMENT_ADDRESS,
         abi: TOURNAMENT_ABI,
         functionName: "endTournamentAndDistribute",
@@ -510,7 +512,7 @@ export default function Creator() {
 
       const registerArgs = [form.name, form.iframeUrl, BigInt(parseInt(form.rewardRate) || 50)];
 
-      const registerGas = await getGasWithBuffer({
+      const registerGas = await getGasWithBuffer(publicClient, {
         address: PLATFORM_ADDRESS,
         abi: PLATFORM_ABI,
         functionName: "registerGame",
