@@ -2,14 +2,14 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState, useRef } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
-import { wagmiAdapter } from "../Providers";
+import { wagmiAdapter, CHAIN_ID } from "../Providers";
 import { useGames } from "../hooks/useGames";
 import { saveScore } from "../lib/gameService";
 import { getActiveAvatarStyle } from "../utils/avatarUtils";
 
 const PLATFORM_ADDRESS = import.meta.env.VITE_PLATFORM_ADDRESS;
 const TOURNAMENT_ADDRESS = import.meta.env.VITE_TOURNAMENT_ADDRESS;
-const CHAIN_ID = Number(import.meta.env.VITE_BOTCHAIN_MAINNET_CHAIN_ID);
+// CHAIN_ID now imported from Providers.jsx (single source of truth)
 
 const TOURNAMENT_SCORE_ABI = [{ name: "submitTournamentScore", type: "function", stateMutability: "nonpayable", inputs: [{ name: "tournamentId", type: "uint256" }, { name: "score", type: "uint256" }], outputs: [] }];
 const PLATFORM_ABI = [{ name: "recordPlayAndEarn", type: "function", stateMutability: "nonpayable", inputs: [{ name: "gameId", type: "uint256" }, { name: "score", type: "uint256" }], outputs: [] }];
@@ -22,6 +22,22 @@ const C = {
   green: "#00FF88", gold: "#FFB700", dim: "#9977CC", dimMore: "#5533AA",
   raj: "'Rajdhani', sans-serif", orb: "'Orbitron', sans-serif",
 };
+
+// ── Dynamic gas helper ──────────────────────────────────────────────────────
+// Estimates real gas needed for any contract call, then adds a 30% safety
+// buffer. Works correctly on any chain (BOTChain, Somnia, future chains) —
+// no more hardcoded gas guesswork that breaks when migrating chains.
+async function getGasWithBuffer(publicClient, { address, abi, functionName, args, account, bufferPct = 30 }) {
+  try {
+    const estimated = await publicClient.estimateContractGas({
+      address, abi, functionName, args, account,
+    });
+    return (estimated * BigInt(100 + bufferPct)) / 100n;
+  } catch (err) {
+    console.warn(`Gas estimation failed for ${functionName}, using fallback:`, err.shortMessage || err.message);
+    return BigInt(3000000);
+  }
+}
 
 function timeAgo(date) {
   if (!date) return "";
@@ -204,21 +220,42 @@ export default function GamePlay() {
       const rewardRate = game.rewardRate || 50;
       const playerReward = Math.floor(rewardRate * 80 / 100);
 
+      const playArgs = [BigInt(onChainGameId), BigInt(finalScore)];
+
+      const playGas = await getGasWithBuffer(publicClient, {
+        address: PLATFORM_ADDRESS,
+        abi: PLATFORM_ABI,
+        functionName: "recordPlayAndEarn",
+        args: playArgs,
+        account: address,
+      });
+
       const hash = await writeContract(wagmiAdapter.wagmiConfig, {
         address: PLATFORM_ADDRESS, abi: PLATFORM_ABI,
         functionName: "recordPlayAndEarn",
-        args: [BigInt(onChainGameId), BigInt(finalScore)],
-        gas: BigInt(6000000),
+        args: playArgs,
+        gas: playGas,
+        chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
 
       if (tournamentId) {
         try {
+          const tArgs = [BigInt(tournamentId), BigInt(finalScore)];
+
+          const tGas = await getGasWithBuffer(publicClient, {
+            address: TOURNAMENT_ADDRESS,
+            abi: TOURNAMENT_SCORE_ABI,
+            functionName: "submitTournamentScore",
+            args: tArgs,
+            account: address,
+          });
+
           const tHash = await writeContract(wagmiAdapter.wagmiConfig, {
             address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_SCORE_ABI,
             functionName: "submitTournamentScore",
-            args: [BigInt(tournamentId), BigInt(finalScore)],
-            gas: BigInt(1500000), chainId: CHAIN_ID,
+            args: tArgs,
+            gas: tGas, chainId: CHAIN_ID,
           });
           await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash: tHash });
         } catch (tErr) {
@@ -233,7 +270,7 @@ export default function GamePlay() {
       setTxHash(hash); setSubmitted(true);
       iframeRef.current?.contentWindow?.postMessage({ type: "TRANSACTION_SUCCESS", _platform: true, txHash: hash }, "*");
     } catch (err) {
-      setSubmitError(err.message || "Transaction failed");
+      setSubmitError(err.shortMessage || err.message || "Transaction failed");
       iframeRef.current?.contentWindow?.postMessage({ type: "TRANSACTION_FAILED", _platform: true, error: err.message }, "*");
     } finally { setSubmitting(false); submittingRef.current = false; }
   };
