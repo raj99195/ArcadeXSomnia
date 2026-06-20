@@ -387,10 +387,10 @@ export default function GamePlay() {
               </div>
             )}
 
-            {/* BOTCHAIN tags bar */}
+            {/* Chain/brand tags bar */}
             <div style={{ padding: "8px 14px", borderTop: `1px solid ${C.border}`, display: "flex", gap: 8, background: "rgba(0,0,0,0.3)" }}>
-              {["BOTCHAIN", "ARCADE X", "BOTCHAIN"].map((t, i) => (
-                <span key={i} style={{ fontSize: 9, padding: "3px 8px", background: i === 2 ? "rgba(123,47,255,0.15)" : "rgba(0,0,0,0.4)", border: `1px solid ${i === 2 ? C.border2 : C.border}`, borderRadius: 4, color: i === 2 ? C.purpleL : C.dimMore, fontFamily: C.raj, fontWeight: 700, letterSpacing: "1px" }}>{t}</span>
+              {["ARCADE X", "ON-CHAIN"].map((t, i) => (
+                <span key={i} style={{ fontSize: 9, padding: "3px 8px", background: i === 0 ? "rgba(123,47,255,0.15)" : "rgba(0,0,0,0.4)", border: `1px solid ${i === 0 ? C.border2 : C.border}`, borderRadius: 4, color: i === 0 ? C.purpleL : C.dimMore, fontFamily: C.raj, fontWeight: 700, letterSpacing: "1px" }}>{t}</span>
               ))}
               <span style={{ marginLeft: "auto", fontSize: 9, color: C.dimMore, fontFamily: C.raj, display: "flex", alignItems: "center" }}>⚡ On-Chain Gaming</span>
             </div>
