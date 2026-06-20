@@ -3,7 +3,7 @@ import { useAccount, usePublicClient } from "wagmi";
 import { useNavigate } from "react-router-dom";
 import { saveGame, saveCreator, getGamesByCreator, registerCreator, getCreatorStatus, getGameById } from "../lib/gameService";
 import { useArcadeBalance } from "../hooks/useArcadeBalance";
-import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
+import { writeContract, waitForTransactionReceipt, estimateContractGas } from "@wagmi/core";
 import { wagmiAdapter, CHAIN_ID } from "../Providers";
 
 const PLATFORM_ADDRESS = import.meta.env.VITE_PLATFORM_ADDRESS;
@@ -71,6 +71,22 @@ const DICEBEAR_STYLES = [
   { id: "fun-emoji",   label: "😎 Emoji",    desc: "Fun"          },
   { id: "identicon",   label: "🔷 Identicon",desc: "Minimal"      },
 ];
+
+// ── Dynamic gas helper ──────────────────────────────────────────────────────
+// Estimates real gas needed for any contract call, then adds a 30% safety
+// buffer. Works correctly on any chain (BOTChain, Somnia, future chains) —
+// no more hardcoded gas guesswork that breaks when migrating chains.
+async function getGasWithBuffer({ address, abi, functionName, args, account, bufferPct = 30 }) {
+  try {
+    const estimated = await estimateContractGas(wagmiAdapter.wagmiConfig, {
+      address, abi, functionName, args, account, chainId: CHAIN_ID,
+    });
+    return (estimated * BigInt(100 + bufferPct)) / 100n;
+  } catch (err) {
+    console.warn(`Gas estimation failed for ${functionName}, using fallback:`, err.shortMessage || err.message);
+    return BigInt(3000000);
+  }
+}
 
 function Btn({ children, onClick, disabled, variant = "primary", style = {} }) {
   const base = { padding: "10px 20px", border: "none", borderRadius: 7, cursor: disabled ? "not-allowed" : "pointer", fontFamily: P.raj, fontWeight: 700, fontSize: 12, letterSpacing: "0.5px", textTransform: "uppercase", transition: "all 0.18s", ...style };
@@ -274,24 +290,40 @@ export default function Creator() {
     setMintError("");
     setMintLoading(true);
     try {
-      // 1. Mint NFT
+      // 1. Mint NFT — gas estimated dynamically
+      const mintGas = await getGasWithBuffer({
+        address: CREATOR_NFT_ADDRESS,
+        abi: NFT_ABI,
+        functionName: "mintCreatorNFT",
+        args: [username, selectedStyle],
+        account: address,
+      });
+
       const hash = await writeContract(wagmiAdapter.wagmiConfig, {
         address: CREATOR_NFT_ADDRESS,
         abi: NFT_ABI,
         functionName: "mintCreatorNFT",
         args: [username, selectedStyle],
-        gas: BigInt(1500000),
+        gas: mintGas,
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
 
-      // 2. initCreator on Platform
+      // 2. initCreator on Platform — gas estimated dynamically
+      const initGas = await getGasWithBuffer({
+        address: PLATFORM_ADDRESS,
+        abi: PLATFORM_ABI,
+        functionName: "initCreator",
+        args: [address],
+        account: address,
+      });
+
       await writeContract(wagmiAdapter.wagmiConfig, {
         address: PLATFORM_ADDRESS,
         abi: PLATFORM_ABI,
         functionName: "initCreator",
         args: [address],
-        gas: BigInt(600000),
+        gas: initGas,
         chainId: CHAIN_ID,
       });
 
@@ -353,21 +385,31 @@ export default function Creator() {
       const startTime = BigInt(Math.floor(Date.now() / 1000) + 60);
       const entryFeeWei = BigInt(Math.floor(Number(tForm.entryFee) * 1e18));
 
+      const args = [
+        BigInt(onChainGameId),
+        selGame.name,
+        selGame.thumbnailUrl || "",
+        entryFeeWei,
+        BigInt(tForm.maxPlayers),
+        startTime,
+        BigInt(tForm.durationInHours),
+      ];
+
+      const createGas = await getGasWithBuffer({
+        address: TOURNAMENT_ADDRESS,
+        abi: TOURNAMENT_ABI,
+        functionName: "createTournament",
+        args,
+        account: address,
+      });
+
       const hash = await writeContract(wagmiAdapter.wagmiConfig, {
         address: TOURNAMENT_ADDRESS,
         abi: TOURNAMENT_ABI,
         functionName: "createTournament",
-        args: [
-          BigInt(onChainGameId),
-          selGame.name,
-          selGame.thumbnailUrl || "",
-          entryFeeWei,
-          BigInt(tForm.maxPlayers),
-          startTime,
-          BigInt(tForm.durationInHours),
-        ],
-        gas: BigInt(1500000),
-        chainId: CHAIN_ID, // BOTChain testnet — explicit chainId fix
+        args,
+        gas: createGas,
+        chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
       setTMsg("✓ Tournament created successfully!");
@@ -383,12 +425,20 @@ export default function Creator() {
 
   const handleEndTournament = async (tournamentId) => {
     try {
+      const endGas = await getGasWithBuffer({
+        address: TOURNAMENT_ADDRESS,
+        abi: TOURNAMENT_ABI,
+        functionName: "endTournamentAndDistribute",
+        args: [BigInt(tournamentId)],
+        account: address,
+      });
+
       const hash = await writeContract(wagmiAdapter.wagmiConfig, {
         address: TOURNAMENT_ADDRESS,
         abi: TOURNAMENT_ABI,
         functionName: "endTournamentAndDistribute",
         args: [BigInt(tournamentId)],
-        gas: BigInt(1000000),
+        gas: endGas,
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
@@ -458,13 +508,23 @@ export default function Creator() {
       
       console.log("✅ Available Game ID:", candidateId);
 
+      const registerArgs = [form.name, form.iframeUrl, BigInt(parseInt(form.rewardRate) || 50)];
+
+      const registerGas = await getGasWithBuffer({
+        address: PLATFORM_ADDRESS,
+        abi: PLATFORM_ABI,
+        functionName: "registerGame",
+        args: registerArgs,
+        account: address,
+      });
+
       // Step 2: Transaction karo
       const hash = await writeContract(wagmiAdapter.wagmiConfig, {
         address: PLATFORM_ADDRESS,
         abi: PLATFORM_ABI,
         functionName: "registerGame",
-        args: [form.name, form.iframeUrl, BigInt(parseInt(form.rewardRate) || MIN_REWARD_RATE)],
-        gas: BigInt(1500000),
+        args: registerArgs,
+        gas: registerGas,
         chainId: CHAIN_ID,
       });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
