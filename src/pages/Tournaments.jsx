@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useAccount, usePublicClient } from "wagmi";
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
-import { wagmiAdapter } from "../Providers";
+import { wagmiAdapter, CHAIN_ID } from "../Providers";
 import { useNavigate } from "react-router-dom";
 
 const TOURNAMENT_ADDRESS = import.meta.env.VITE_TOURNAMENT_ADDRESS;
-const CHAIN_ID = Number(import.meta.env.VITE_BOTCHAIN_MAINNET_CHAIN_ID);
+// CHAIN_ID now imported from Providers.jsx (single source of truth)
 const ARCADE_TOKEN_ADDRESS = import.meta.env.VITE_ARCADE_TOKEN_ADDRESS;
 
 const TOURNAMENT_ABI = [
@@ -22,6 +22,22 @@ const ERC20_ABI = [
   { name: "allowance", type: "function", stateMutability: "view", inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
   { name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] },
 ];
+
+// ── Dynamic gas helper ──────────────────────────────────────────────────────
+// Estimates real gas needed for any contract call, then adds a 30% safety
+// buffer. Works correctly on any chain (BOTChain, Somnia, future chains) —
+// no more hardcoded gas guesswork that breaks when migrating chains.
+async function getGasWithBuffer(publicClient, { address, abi, functionName, args, account, bufferPct = 30 }) {
+  try {
+    const estimated = await publicClient.estimateContractGas({
+      address, abi, functionName, args, account,
+    });
+    return (estimated * BigInt(100 + bufferPct)) / 100n;
+  } catch (err) {
+    console.warn(`Gas estimation failed for ${functionName}, using fallback:`, err.shortMessage || err.message);
+    return BigInt(3000000);
+  }
+}
 
 // Scores fetched directly from Tournament.sol via getTournamentPlayers()
 
@@ -444,24 +460,36 @@ export default function Tournaments() {
     try {
       const allowance = await publicClient.readContract({ address: ARCADE_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: "allowance", args: [address, TOURNAMENT_ADDRESS] });
       if (BigInt(allowance) < BigInt(tournament.entryFee)) {
-        const ah = await writeContract(wagmiAdapter.wagmiConfig, { address: ARCADE_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: "approve", args: [TOURNAMENT_ADDRESS, tournament.entryFee], gas: BigInt(400000), chainId: CHAIN_ID });
+        const approveGas = await getGasWithBuffer(publicClient, {
+          address: ARCADE_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: "approve",
+          args: [TOURNAMENT_ADDRESS, tournament.entryFee], account: address,
+        });
+        const ah = await writeContract(wagmiAdapter.wagmiConfig, { address: ARCADE_TOKEN_ADDRESS, abi: ERC20_ABI, functionName: "approve", args: [TOURNAMENT_ADDRESS, tournament.entryFee], gas: approveGas, chainId: CHAIN_ID });
         await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash: ah });
       }
-      const hash = await writeContract(wagmiAdapter.wagmiConfig, { address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "joinTournament", args: [BigInt(tournament.id)], gas: BigInt(1500000), chainId: CHAIN_ID });
+      const joinGas = await getGasWithBuffer(publicClient, {
+        address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "joinTournament",
+        args: [BigInt(tournament.id)], account: address,
+      });
+      const hash = await writeContract(wagmiAdapter.wagmiConfig, { address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "joinTournament", args: [BigInt(tournament.id)], gas: joinGas, chainId: CHAIN_ID });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
       setMsg("✓ Joined tournament!");
       await fetchTournaments(); await fetchBalance();
-    } catch (err) { setMsg("Error: " + err.message); }
+    } catch (err) { setMsg("Error: " + (err.shortMessage || err.message)); }
     finally { setJoining(false); setJoiningId(null); }
   };
 
   const handleEnd = async (tournament) => {
     try {
-      const hash = await writeContract(wagmiAdapter.wagmiConfig, { address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "endTournamentAndDistribute", args: [BigInt(tournament.id)], gas: BigInt(2500000), chainId: CHAIN_ID });
+      const endGas = await getGasWithBuffer(publicClient, {
+        address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "endTournamentAndDistribute",
+        args: [BigInt(tournament.id)], account: address,
+      });
+      const hash = await writeContract(wagmiAdapter.wagmiConfig, { address: TOURNAMENT_ADDRESS, abi: TOURNAMENT_ABI, functionName: "endTournamentAndDistribute", args: [BigInt(tournament.id)], gas: endGas, chainId: CHAIN_ID });
       await waitForTransactionReceipt(wagmiAdapter.wagmiConfig, { hash });
       setMsg("🏆 Prizes distributed!");
       await fetchTournaments();
-    } catch (err) { setMsg("Error: " + err.message); }
+    } catch (err) { setMsg("Error: " + (err.shortMessage || err.message)); }
   };
 
   const filtered = tournaments.filter(t => {
