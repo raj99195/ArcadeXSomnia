@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAccount, usePublicClient } from "wagmi";
 import { writeContract, waitForTransactionReceipt } from "@wagmi/core";
-import { wagmiAdapter } from "../Providers";
+import { wagmiAdapter, CHAIN_ID } from "../Providers";
 import { db } from "../lib/firebase";
-import { doc, getDoc, updateDoc, collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { doc, updateDoc } from "firebase/firestore";
 import { useGames } from "../hooks/useGames";
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 const PLATFORM_ADDRESS = import.meta.env.VITE_PLATFORM_ADDRESS;
-const CHAIN_ID = Number(import.meta.env.VITE_BOTCHAIN_TESTNET_CHAIN_ID || 968);
+// CHAIN_ID now imported from Providers.jsx (single source of truth)
 
 const C = {
   bg: "#08070f", sidebar: "#0d0b1a", card: "#12102a",
@@ -54,6 +54,7 @@ export default function CreatorGameDetail() {
   const [totalEarned, setTotalEarned] = useState(0);
   const [playsChartData, setPlaysChartData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [statsError, setStatsError] = useState("");
 
   // Edit settings
   const [editRewardRate, setEditRewardRate] = useState("");
@@ -70,33 +71,42 @@ export default function CreatorGameDetail() {
     if (!game) return;
     setEditRewardRate(String(game.rewardRate || 50));
     const fetchStats = async () => {
+      setLoading(true);
+      setStatsError("");
       try {
-        const gDoc = await getDoc(doc(db, "games", String(game.gameId || game.id)));
-        if (gDoc.exists()) {
-          const data = gDoc.data();
-          const plays = data.plays || 0;
-          setTotalPlays(plays);
-          const rewardRate = game.rewardRate || 50;
-          setTotalEarned(Math.floor(plays * rewardRate * 0.2));
+        // Use the same /api/games?action=stats endpoint the rest of the app
+        // uses (backed by Firebase Admin SDK server-side) — this avoids
+        // client-side Firestore Security Rules blocking direct reads.
+        const res = await fetch(`/api/games?action=stats&gameId=${game.gameId || game.id}`);
+        if (!res.ok) throw new Error(`Stats API returned ${res.status}`);
+        const data = await res.json();
 
-          // Generate last 7 days chart data from total plays
-          // Distribute plays across last 7 days for visualization
-          const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-          const today = new Date().getDay(); // 0=Sun
-          const orderedDays = [...days.slice(today), ...days.slice(0, today)];
-          // Simulate distribution — last day has most activity
-          const weights = [0.05, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30];
-          const chartData = orderedDays.map((day, i) => ({
-            day,
-            plays: Math.floor(plays * weights[i]),
-            earned: Math.floor(plays * weights[i] * rewardRate * 0.2),
-          }));
-          setPlaysChartData(chartData);
-        }
-        const pSnap = await getDocs(collection(db, "games", String(game.gameId || game.id), "players"));
-        setUniquePlayers(pSnap.size);
-      } catch (e) {}
-      finally { setLoading(false); }
+        const plays = data.plays || 0;
+        setTotalPlays(plays);
+        setUniquePlayers(data.uniquePlayers || 0);
+
+        const rewardRate = game.rewardRate || 50;
+        setTotalEarned(Math.floor(plays * rewardRate * 0.2));
+
+        // Generate last 7 days chart data from total plays
+        // Distribute plays across last 7 days for visualization
+        const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+        const today = new Date().getDay(); // 0=Sun
+        const orderedDays = [...days.slice(today), ...days.slice(0, today)];
+        // Simulate distribution — last day has most activity
+        const weights = [0.05, 0.08, 0.10, 0.12, 0.15, 0.20, 0.30];
+        const chartData = orderedDays.map((day, i) => ({
+          day,
+          plays: Math.floor(plays * weights[i]),
+          earned: Math.floor(plays * weights[i] * rewardRate * 0.2),
+        }));
+        setPlaysChartData(chartData);
+      } catch (e) {
+        console.error("Failed to fetch game stats:", e);
+        setStatsError("Couldn't load stats — try refreshing.");
+      } finally {
+        setLoading(false);
+      }
     };
     fetchStats();
   }, [game?.id]);
@@ -185,6 +195,12 @@ export default function CreatorGameDetail() {
       {/* ── CONTENT ── */}
       <div style={{ padding: isMobile ? "16px" : "24px 36px" }}>
 
+        {statsError && (
+          <div style={{ marginBottom: 16, padding: "10px 16px", background: "rgba(255,68,68,0.06)", border: "1px solid rgba(255,68,68,0.2)", borderRadius: 8, fontSize: 12, color: C.red, fontFamily: C.raj }}>
+            {statsError}
+          </div>
+        )}
+
         {/* ── OVERVIEW ── */}
         {activeTab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -211,16 +227,16 @@ export default function CreatorGameDetail() {
 
               <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px" }}>
                 <div style={{ fontSize: 9, color: C.dimMore, fontFamily: C.raj, fontWeight: 700, textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 14 }}>Game Details</div>
-                {[["Game ID", `#${game.gameId}`], ["Category", game.category || "—"], ["Status", "Live ✓"], ["Chain", "BOTChain EVM (968)"], ["Contract", "Platform.sol"]].map(([k, v]) => (
+                {[["Game ID", `#${game.gameId}`], ["Category", game.category || "—"], ["Status", "Live ✓"], ["Contract", "Platform.sol"]].map(([k, v]) => (
                   <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
                     <span style={{ color: C.dimMore, fontFamily: C.raj }}>{k}</span>
                     <span style={{ color: "#c4a0ff", fontFamily: C.raj, fontWeight: 600 }}>{v}</span>
                   </div>
                 ))}
                 {game.txHash && (
-                  <a href={`https://scan.botchain.ai/tx/${game.txHash}`} target="_blank" rel="noreferrer"
+                  <a href={`https://shannon-explorer.somnia.network/tx/${game.txHash}`} target="_blank" rel="noreferrer"
                     style={{ display: "block", marginTop: 12, fontSize: 10, color: C.purpleL, textDecoration: "none", fontFamily: C.raj, fontWeight: 700 }}>
-                    View on BOTScan →
+                    View on Somnia Explorer →
                   </a>
                 )}
               </div>
